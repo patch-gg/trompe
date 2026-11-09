@@ -33,6 +33,7 @@ To use it:
 2. Describe the look you want, as materials ("weathered limestone and ochre plaster walls, terracotta roofs"). Don't name objects: anything named here, like a fountain or a market stall, gets painted onto walls.
 3. Press **Plan cameras**, then **Texture level**.
 4. Download the textured `.glb` or the texture.
+5. Build your game on it and [publish it on Patch](#publish-it-on-patch).
 
 If you leave the fal key field empty, the dev server adds `FAL_KEY` server-side and the browser never sees it. A key typed into the field is kept in that browser and sent straight to fal.
 
@@ -52,6 +53,22 @@ To try prompt or model changes cheaply before a full run, `scripts/prompt-test.m
 To fill whatever a saved run still misses, `--resume <id>` plans views only where the texture is missing or poor and paints on top, in place. For example: `node scripts/texture.mjs --level samples/village.glb --resume village --views 30 --aerial 8 --atlas 8192`. `--parallel 6` paints non-overlapping views at the same time, which is faster but leaves visible seams where they meet.
 
 On WSL2, `scripts/browser.mjs` points headless Chromium's ANGLE at Mesa's D3D12 driver, so runs use the real GPU instead of SwiftShader.
+
+## Publish it on Patch
+
+Built a game on a level trompe painted? Publish it on [Patch](https://patch.gg), where people play and remix browser
+games and mods. Install `pch`, Patch's command line, then restart your coding agent and ask it to publish the game: the
+install gives every agent on your PC Patch's tools. Or run it yourself:
+
+```bash
+npm i -g @patchgg/cli      # or: curl -fsSL https://patch.gg/install.sh | sh
+pch login
+pch init                   # in your game's folder; it says what's next
+pch publish
+```
+
+Publishing needs [Patch Desktop](https://docs.patch.gg/get-started) open on a Windows PC: it plays the game once to
+test it before it goes live.
 
 ## How it works
 
