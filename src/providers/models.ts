@@ -119,3 +119,10 @@ export const MODELS: Record<string, EditModel> = {
       aspect_ratio: '1:1', resolution: '1k', output_format: 'png', enable_prompt_expansion: false }),
   },
 };
+
+/**
+ * Material estimation for the baked texture (core/pbr.ts): PATINA predicts normal and roughness maps from an image
+ * of at most 2048 px a side. fal lists it per megapixel.
+ */
+export const MATERIAL_MODEL = { key: 'patina', label: 'PATINA', endpoint: 'fal-ai/patina', price: 0.01, maxSize: 2048 };
+export type MaterialMap = 'basecolor' | 'normal' | 'roughness' | 'metalness' | 'height';

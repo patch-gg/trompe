@@ -1,6 +1,9 @@
 node_modules/
 dist/
 runs/
+# fal key for the dev server and scripts (FAL_KEY=...)
+.env
+.env.*
 spike/out/
 spike/.venv/
 video/out/

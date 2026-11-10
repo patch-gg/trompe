@@ -1,5 +1,5 @@
 import { fal } from '@fal-ai/client';
-import type { EditInput, EditModel } from './models';
+import { MATERIAL_MODEL, type EditInput, type EditModel, type MaterialMap } from './models';
 
 /**
  * fal access. Without a key the client talks to the dev server's proxy (/api/fal/proxy), which adds the key
@@ -35,4 +35,23 @@ export async function runEdit(model: EditModel, input: EditInput, signal?: Abort
   if (!res.ok) throw new Error(`fetching ${model.label} output failed: ${res.status}`);
   const image = await createImageBitmap(await res.blob());
   return { image, seconds: (performance.now() - t0) / 1000, requestId: r.requestId, expanded: data.vgl };
+}
+
+/** Predict material maps for one image (a data URL of at most 2048 px a side). */
+export async function runMaterial<M extends MaterialMap>(imageUrl: string, maps: M[], seed: number, signal?: AbortSignal):
+  Promise<{ maps: Record<M, ImageBitmap>; seconds: number }> {
+  const t0 = performance.now();
+  const r = await fal.subscribe(MATERIAL_MODEL.endpoint, { input: { image_url: imageUrl, maps, seed, output_format: 'png' },
+    logs: false, abortSignal: signal });
+  const images = (r.data as { images?: { url: string; map_type: string }[] }).images ?? [];
+  const out = {} as Record<M, ImageBitmap>;
+  for (const m of maps) {
+    const url = images.find((i) => i.map_type === m)?.url;
+    if (!url) throw new Error(`${MATERIAL_MODEL.label} returned no ${m} map`);
+    const res = await fetch(mediaUrl(url), { signal });
+    if (!res.ok) throw new Error(`fetching the ${m} map failed: ${res.status}`);
+    // as stored: these are data, not colours, so no colour-space conversion on decode
+    out[m] = await createImageBitmap(await res.blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+  }
+  return { maps: out, seconds: (performance.now() - t0) / 1000 };
 }

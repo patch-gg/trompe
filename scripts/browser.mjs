@@ -6,6 +6,16 @@ import { chromium } from 'playwright';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+/** FAL_KEY from the environment, else from .env / .env.local in the repo (the dev server reads the same files). */
+export async function falKey() {
+  if (!process.env.FAL_KEY) {
+    const { loadEnv } = await import('vite');
+    const key = loadEnv('development', ROOT, 'FAL_').FAL_KEY;
+    if (key) process.env.FAL_KEY = key;
+  }
+  return process.env.FAL_KEY;
+}
+
 export async function launchBrowser() {
   const env = { ...process.env };
   const args = ['--ignore-gpu-blocklist', '--enable-gpu', '--mute-audio'];

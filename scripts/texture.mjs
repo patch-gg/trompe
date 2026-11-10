@@ -2,8 +2,10 @@
 // Texture a level headlessly and save the run to runs/<id>/.
 //   FAL_KEY=... node scripts/texture.mjs --level samples/courtyard.glb --id courtyard --views 24 \
 //     [--lighting overcast|outdoor|indoor] [--style "..."] [--first flux3-klein] [--fill fibo2] [--aerial 8] [--roofs 24] [--holes 12] [--plan-only]
+//     [--pbr [--pbr-size 4096]]   also make normal and roughness maps for the finished texture
+// Every view is written to runs/<id>/ as it's painted, so a run that dies can be picked up with --resume <id>.
 import { parseArgs } from 'node:util';
-import { launchBrowser, openApp, startServer } from './browser.mjs';
+import { falKey, launchBrowser, openApp, startServer } from './browser.mjs';
 
 const { values: a } = parseArgs({
   options: {
@@ -24,10 +26,12 @@ const { values: a } = parseArgs({
     'view-size': { type: 'string', default: '1024' },
     'plan-only': { type: 'boolean', default: false },
     resume: { type: 'string' },
+    pbr: { type: 'boolean', default: false },
+    'pbr-size': { type: 'string', default: '4096' },
   },
 });
-if (!process.env.FAL_KEY && !a['plan-only']) {
-  console.error('FAL_KEY is not set (export FAL_KEY=your-fal-key)');
+if (!a['plan-only'] && !(await falKey())) {
+  console.error('FAL_KEY is not set (export FAL_KEY=your-fal-key, or put FAL_KEY=... in .env.local)');
   process.exit(1);
 }
 const id = a.resume ?? a.id ?? `${a.level.split('/').pop().replace(/\.\w+$/, '')}-${Date.now().toString(36)}`;
@@ -48,6 +52,7 @@ try {
     onEvent: (e) => {
       if (e.type === 'view-done') log(`view ${String(e.index).padStart(2)} ${e.model.padEnd(12)} ${e.seconds}s unknown ${(100 * e.unknown).toFixed(0)}% → painted ${(100 * e.coverage).toFixed(1)}% · $${e.cost.toFixed(2)}`);
       else if (e.type === 'save') log(`saving ${e.msg}`);
+      else if (e.type === 'pbr') log(`maps: tile ${e.done}/${e.total}`);
       else log(JSON.stringify(e));
     },
   });
@@ -69,9 +74,13 @@ try {
     log(`plan: ${JSON.stringify(plan)}`);
   }
   if (!a['plan-only']) {
-    const res = await page.evaluate((o) => (o.resume ? window.trompe.topUp(o.opts) : window.trompe.run(o.opts)), { resume: !!a.resume, opts });
+    const res = await page.evaluate((o) => (o.resume ? window.trompe.topUp(o.opts, undefined, o.id) : window.trompe.run(o.opts, undefined, o.id)),
+      { resume: !!a.resume, opts, id });
     log(`run: ${JSON.stringify(res)}`);
-    await page.evaluate((runId) => window.trompe.save(runId), id);
+    if (a.pbr) {
+      log(`maps: ${JSON.stringify(await page.evaluate((size) => window.trompe.pbr({ size }), +a['pbr-size']))}`);
+      await page.evaluate((runId) => window.trompe.save(runId), id);
+    }
     log(`saved to runs/${id}/`);
   }
 } finally {

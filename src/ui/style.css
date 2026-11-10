@@ -42,3 +42,9 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .drop { border: 1px dashed #333; border-radius: 6px; padding: 12px; text-align: center; color: var(--dim); cursor: pointer; }
 .drop.over { border-color: var(--pink); color: var(--fg); }
 .note { color: var(--dim); font-size: 11px; }
+.seg button.on, button.on { color: var(--pink); }
+button.on { border-color: var(--pink); }
+#hint { position: fixed; left: 16px; bottom: 14px; padding: 7px 11px; border-radius: 6px; background: rgba(0, 0, 0, 0.72);
+  color: var(--fg); font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.15s ease-out; }
+#hint.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { #hint { transition: none; } }

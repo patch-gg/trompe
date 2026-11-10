@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "texture": "node scripts/texture.mjs",
-    "capture": "node scripts/capture.mjs"
+    "capture": "node scripts/capture.mjs",
+    "pbr": "node scripts/pbr.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",

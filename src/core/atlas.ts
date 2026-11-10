@@ -94,10 +94,19 @@ void main() {
 const BYTES_FRAG = /* glsl */ `
 uniform sampler2D src;
 uniform vec3 fill;
+uniform int cell;
+uniform float keepAlpha;
 layout(location = 0) out vec4 outColor;
 void main() {
-  vec4 c = texelFetch(src, ivec2(gl_FragCoord.xy), 0);
-  outColor = vec4(c.a > 0.0 ? c.rgb : fill, 1.0);
+  // average the painted texels of each cell x cell block (cell 1: the texel itself)
+  ivec2 base = ivec2(gl_FragCoord.xy) * cell;
+  vec3 acc = vec3(0.0);
+  float n = 0.0;
+  for (int y = 0; y < cell; y++) for (int x = 0; x < cell; x++) {
+    vec4 c = texelFetch(src, base + ivec2(x, y), 0);
+    if (c.a > 0.0) { acc += c.rgb; n += 1.0; }
+  }
+  outColor = vec4(n > 0.0 ? acc / n : fill, keepAlpha > 0.5 && n == 0.0 ? 0.0 : 1.0);
 }`;
 
 const CELL_FRAG = /* glsl */ `
@@ -137,7 +146,8 @@ export class Atlas {
   private readonly islandMat: THREE.ShaderMaterial;
   private readonly copyMat = passMaterial(COPY_FRAG, { src: { value: null } });
   private readonly dilateMat = passMaterial(DILATE_FRAG, { src: { value: null }, islands: { value: null } });
-  private readonly bytesMat = passMaterial(BYTES_FRAG, { src: { value: null }, fill: { value: new THREE.Vector3(0.5, 0.5, 0.5) } });
+  private readonly bytesMat = passMaterial(BYTES_FRAG, { src: { value: null }, fill: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+    cell: { value: 1 }, keepAlpha: { value: 0 } });
   private readonly cellMat = passMaterial(CELL_FRAG, { src: { value: null }, cell: { value: 32 } });
   private readonly statsMat = passMaterial(STATS_FRAG, { src: { value: null }, islands: { value: null }, step: { value: 8 } });
 
@@ -244,15 +254,23 @@ export class Atlas {
     return q;
   }
 
-  /** RGBA8 export of the padded texture in glTF image order (first row = v 0). */
-  readBytes(fill: [number, number, number] = [0.5, 0.5, 0.5]): { data: Uint8ClampedArray; size: number } {
-    const rt = byteTarget(this.size, this.size, { linear: false });
-    this.bytesMat.uniforms.src.value = this.display.texture;
-    this.bytesMat.uniforms.fill.value.set(...fill);
+  /**
+   * RGBA8 export of the padded texture in glTF image order (first row = v 0). `size` (the texture's size divided by
+   * a whole number) averages it down; with `alpha`, unpainted texels come back with alpha 0 instead of 255.
+   */
+  readBytes(fill: [number, number, number] = [0.5, 0.5, 0.5], size = this.size, alpha = false): { data: Uint8ClampedArray; size: number } {
+    const cell = Math.max(1, Math.round(this.size / size));
+    const n = Math.floor(this.size / cell);
+    const rt = byteTarget(n, n, { linear: false });
+    const u = this.bytesMat.uniforms;
+    u.src.value = this.display.texture;
+    u.fill.value.set(...fill);
+    u.cell.value = cell;
+    u.keepAlpha.value = alpha ? 1 : 0;
     this.gpu.pass(this.bytesMat, rt);
     const data = this.gpu.readU8(rt, 0, false);
     rt.dispose();
-    return { data, size: this.size };
+    return { data, size: n };
   }
 
   dispose() {

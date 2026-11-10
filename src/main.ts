@@ -26,8 +26,12 @@ function fit() {
 window.addEventListener('resize', fit);
 
 let lastViewer: unknown = null;
-function frame() {
+let lastTime = performance.now();
+function frame(now: number) {
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
   if (session.viewer && session.viewer !== lastViewer) { lastViewer = session.viewer; fit(); }
+  session.viewer?.tick(dt);
   if (!headless && session.viewer?.dirty) session.viewer.render();
   requestAnimationFrame(frame);
 }

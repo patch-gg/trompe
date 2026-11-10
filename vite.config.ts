@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 const FAL_HOST = /(^|\.)fal\.(ai|run|media)$/;
 
@@ -18,7 +18,8 @@ function fail(res: ServerResponse, status: number, msg: string) {
 
 /**
  * fal proxy for local use: the browser never sees the key. Implements fal's proxy protocol
- * (`x-fal-target-url`) plus a media passthrough for result images. The key comes from FAL_KEY.
+ * (`x-fal-target-url`) plus a media passthrough for result images. The key comes from FAL_KEY (the environment, or
+ * a .env / .env.local file next to this config).
  */
 function falProxy(): Plugin {
   return {
@@ -46,8 +47,22 @@ function falProxy(): Plugin {
           fail(res, 502, `proxy error: ${(e as Error).message}`);
         }
       });
-      // Saves run artefacts under ./runs/<id>/<file> (dev server only; names are restricted to [\w.-]).
+      // Saves run artefacts under ./runs/<id>/<file> (dev server only; names are restricted to [\w.-]); GET lists the runs.
       server.middlewares.use('/api/runs', async (req, res) => {
+        if (req.method === 'GET' && /^\/?(\?.*)?$/.test(req.url ?? '')) {
+          // saved runs, newest first: [{ id, level, views, cost, partial }]
+          const root = path.resolve(server.config.root, 'runs');
+          const runs: { id: string; level: string; views: number; cost: number; partial: boolean; at: number }[] = [];
+          for (const id of await fs.readdir(root).catch(() => [] as string[])) {
+            try {
+              const file = path.join(root, id, 'run.json');
+              const m = JSON.parse(await fs.readFile(file, 'utf8'));
+              runs.push({ id, level: m.level, views: m.views.length, cost: m.cost, partial: !!m.partial, at: (await fs.stat(file)).mtimeMs });
+            } catch { /* not a run */ }
+          }
+          res.setHeader('content-type', 'application/json');
+          return res.end(JSON.stringify(runs.sort((a, b) => b.at - a.at)));
+        }
         if (req.method !== 'POST') return fail(res, 405, 'POST only');
         const parts = decodeURIComponent((req.url ?? '').replace(/^\/+/, '').split('?')[0]).split('/');
         const safe = /^[\w.-]+$/;
@@ -75,8 +90,12 @@ function falProxy(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [falProxy()],
-  server: { port: 5178, strictPort: false },
-  build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
+export default defineConfig(({ mode }) => {
+  // FAL_KEY may live in .env.local (gitignored) instead of the shell; it stays on the server either way.
+  process.env.FAL_KEY ??= loadEnv(mode, import.meta.dirname, 'FAL_').FAL_KEY;
+  return {
+    plugins: [falProxy()],
+    server: { port: 5178, strictPort: false },
+    build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
+  };
 });

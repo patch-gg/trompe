@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Atlas } from './atlas';
 import { ClayRenderer, OUTDOOR, type Lighting } from './clay';
 import { Gpu } from './gpu';
+import type { PbrMaps } from './pbr';
 import type { Level } from './scene';
 import { makeCamera, ViewRenderer, type ViewSpec } from './views';
 
@@ -20,6 +21,8 @@ export class Engine {
   readonly views: ViewRenderer;
   readonly atlas: Atlas;
   readonly options: EngineOptions;
+  /** Normal and roughness maps predicted for the current texture (core/pbr.ts); unset until they're made. */
+  pbr?: PbrMaps;
   private readonly clayTarget: THREE.WebGLRenderTarget;
   private readonly compTexture: THREE.DataTexture;
 

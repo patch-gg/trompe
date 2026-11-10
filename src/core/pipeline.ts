@@ -56,12 +56,15 @@ export interface RunRecord {
   options: PipelineOptions;
   plan: Plan;
   views: ViewRecord[];
+  /** What the image models cost (the PBR maps, when made, are counted in `pbr`). */
   cost: number;
   seconds: number;
+  /** Normal and roughness maps made for this run's texture (core/pbr.ts). */
+  pbr?: { size: number; tiles: number; cost: number; seconds: number };
 }
 
 export type PipelineEvent =
-  | { type: 'planned'; plan: Plan }
+  | { type: 'planned'; plan: Plan; options: PipelineOptions }
   | { type: 'view-start'; index: number; wave: number; model: string; state: Uint8ClampedArray }
   | { type: 'view-done'; view: ViewRecord; cost: number; elapsed: number }
   | { type: 'error'; index: number; message: string }
@@ -168,6 +171,19 @@ export async function generateView(p: PreparedView, size: number, seed: number, 
   return { gen, comp, seconds: r.seconds, expanded: r.expanded, left: nUnknown ? nLeft / nUnknown : 0 };
 }
 
+/**
+ * The most a planned run can cost, and roughly how long it takes. Which model paints a view is only known once the
+ * views before it are painted (mostly-unpainted views go to the first-view model), so every view after the first
+ * is counted at the dearer of the two; roof and hole views always use the fill model. About 10 s a wave.
+ */
+export function quote(plan: Pick<Plan, 'views' | 'waves'>, o: { firstModel: string; fillModel: string; holes?: number }) {
+  const first = MODELS[o.firstModel]?.price ?? 0, fill = MODELS[o.fillModel]?.price ?? 0;
+  const holes = o.holes ?? 0;
+  let cost = holes * fill;
+  plan.views.forEach((v, i) => { cost += i === 0 ? first : v.kind === 'roof' || v.kind === 'fill' ? fill : Math.max(first, fill); });
+  return { views: plan.views.length + holes, cost, seconds: 10 * (plan.waves.length + holes) };
+}
+
 /** A run being extended (top-up): its views stay as they are and new views continue its numbering. */
 export interface Continuation { views: ViewRecord[]; cost: number; seconds: number; plan: Plan }
 
@@ -176,7 +192,7 @@ export async function runPipeline(engine: Engine, opts: Partial<PipelineOptions>
   const o: PipelineOptions = { ...DEFAULT_PIPELINE, ...opts, plan: { ...DEFAULT_PIPELINE.plan, ...opts.plan } };
   const t0 = performance.now();
   const plan = existingPlan ?? makePlan(engine.gpu, engine.level, engine.views, o.plan);
-  onEvent({ type: 'planned', plan });
+  onEvent({ type: 'planned', plan, options: o });
   const S = engine.size;
   const views: ViewRecord[] = [];
   let cost = 0;

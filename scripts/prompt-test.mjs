@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { launchBrowser, openApp, ROOT, startServer } from './browser.mjs';
+import { falKey, launchBrowser, openApp, ROOT, startServer } from './browser.mjs';
 
 const { values: a } = parseArgs({
   options: {
@@ -23,8 +23,8 @@ const { values: a } = parseArgs({
     lighting: { type: 'string', default: 'outdoor' },
   },
 });
-if (!process.env.FAL_KEY && !a.dry) {
-  console.error('FAL_KEY is not set (export FAL_KEY=your-fal-key)');
+if (!a.dry && !(await falKey())) {
+  console.error('FAL_KEY is not set (export FAL_KEY=your-fal-key, or put FAL_KEY=... in .env.local)');
   process.exit(1);
 }
 const out = path.join(ROOT, 'runs', `${a.run}-ab`, a.tag);

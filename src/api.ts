@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LIGHTING, type Session } from './session';
 import { DEFAULT_PIPELINE, generateView, prepareView, promptText, type PipelineEvent, type PipelineOptions } from './core/pipeline';
+import type { PbrOptions } from './core/pbr';
 import type { PlanOptions } from './core/planner';
 import { configureFal } from './providers/fal';
 import { plan as makePlan, planStats } from './core/planner';
@@ -36,16 +37,30 @@ export function makeApi(session: Session) {
       return { views: p.views.length, points: p.points.length, waves: p.waves.map((w) => w.length),
         predicted: p.predicted[p.predicted.length - 1], stats: { ...planStats } };
     },
-    async run(opts: Partial<PipelineOptions>, falKey?: string) {
+    /** Paint the level. `saveAs`: write every view to runs/<saveAs>/ as it's painted, and the whole run at the end. */
+    async run(opts: Partial<PipelineOptions>, falKey?: string, saveAs?: string) {
       configureFal(falKey);
-      const record = await session.run(opts, forward);
+      const record = await session.run(opts, forward, saveAs);
       return { views: record.views.length, cost: record.cost, seconds: record.seconds, coverage: record.views.at(-1)?.coverage ?? 0 };
     },
     /** Continue a loaded run where its texture is still missing or poor. */
-    async topUp(opts: Partial<PipelineOptions>, falKey?: string) {
+    async topUp(opts: Partial<PipelineOptions>, falKey?: string, saveAs?: string) {
       configureFal(falKey);
-      const record = await session.topUp(opts, forward);
+      const record = await session.topUp(opts, forward, saveAs);
       return { views: record.views.length, cost: record.cost, seconds: record.seconds, coverage: record.views.at(-1)?.coverage ?? 0 };
+    },
+    /** Normal and roughness maps for the painted texture (one material-model call per tile). */
+    async pbr(opts: Partial<PbrOptions> = {}, falKey?: string) {
+      configureFal(falKey);
+      const m = await session.makePbr(opts, (done, total) => emit({ type: 'pbr', done, total }));
+      return { size: m.size, tiles: m.tiles, cost: m.cost, seconds: m.seconds };
+    },
+    /** Walk the level from the plan's point nearest `near` (or the first), for stills and tests; null to stop. */
+    walk(o: { near?: [number, number, number]; yaw?: number } | null = {}) {
+      const v = session.viewer!;
+      if (!o) { v.stopWalk(); return null; }
+      const w = v.startWalk(session.walkStart(o.near ? new THREE.Vector3(...o.near) : undefined), o.yaw ?? 0);
+      return { feet: w.position.toArray(), onGround: w.onGround };
     },
     async save(id: string) {
       await session.saveRun(id, (msg) => emit({ type: 'save', msg }));

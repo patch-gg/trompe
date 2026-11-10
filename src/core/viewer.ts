@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OUTDOOR, sunDirection, type Lighting } from './clay';
 import type { Engine } from './engine';
+import type { PbrMaps } from './pbr';
 import { SkyDome } from './sky';
 import type { ViewSpec } from './views';
 import { makeCamera, viewDirection } from './views';
+import { WalkControls, Walker } from './walk';
 
 export const PINK = new THREE.Color('#F53CD1');
 
@@ -115,8 +117,15 @@ export class Viewer {
   /** Show the AI-matched sky behind textured views (otherwise the flat clay sky colour). */
   aiSky = true;
   dirty = true;
+  /** Set while walking the level in first person (see `startWalk`). */
+  walker?: Walker;
+  private walkControls?: WalkControls;
+  private orbitPose?: { position: THREE.Vector3; target: THREE.Vector3; fov: number };
+  private pbrTextures: THREE.DataTexture[] = [];
+  /** Strength of the normal map in the lit display (0 = flat). */
+  relief = 1;
 
-  constructor(private readonly engine: Engine, dom: HTMLElement) {
+  constructor(private readonly engine: Engine, private readonly dom: HTMLElement) {
     const { level, clay } = engine;
     this.clayMesh = new THREE.Mesh(level.geometry, clay.material);
     this.clayMesh.castShadow = this.clayMesh.receiveShadow = true;
@@ -193,6 +202,43 @@ export class Viewer {
     this.dirty = true;
   }
 
+  /**
+   * Use (or drop) predicted normal and roughness maps in the lit display. The maps follow glTF's conventions, so
+   * the normal's Y is flipped here the way GLTFLoader flips it for meshes without tangents.
+   */
+  setPbr(maps: PbrMaps | undefined) {
+    for (const t of this.pbrTextures) t.dispose();
+    this.pbrTextures = [];
+    const m = this.litMat;
+    if (maps) {
+      const make = (data: Uint8ClampedArray) => {
+        const t = new THREE.DataTexture(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), maps.size, maps.size, THREE.RGBAFormat);
+        t.generateMipmaps = true;
+        t.minFilter = THREE.LinearMipmapLinearFilter;
+        t.magFilter = THREE.LinearFilter;
+        t.anisotropy = this.engine.gpu.renderer.capabilities.getMaxAnisotropy();
+        t.needsUpdate = true;
+        this.pbrTextures.push(t);
+        return t;
+      };
+      m.normalMap = make(maps.normal);
+      m.roughnessMap = make(maps.orm);
+      m.roughness = 1;
+    } else {
+      m.normalMap = m.roughnessMap = null;
+      m.roughness = 0.92;
+    }
+    this.setRelief(this.relief);
+    m.needsUpdate = true;
+    this.dirty = true;
+  }
+
+  setRelief(strength: number) {
+    this.relief = strength;
+    this.litMat.normalScale.set(strength, -strength);
+    this.dirty = true;
+  }
+
   /** Pink markers for player points and planned cameras. */
   showPlan(points: THREE.Vector3[], views: ViewSpec[], scale = 0.9, color: THREE.ColorRepresentation = PINK) {
     this.clearOverlay();
@@ -225,6 +271,55 @@ export class Viewer {
     this.points = undefined;
     this.frusta = undefined;
     this.dirty = true;
+  }
+
+  /**
+   * Walk the level in first person from `eye` (a player's eye position, e.g. one of the plan's points). WASD or the
+   * arrows move, Shift runs, Space jumps, the mouse looks; `onExit` runs when the walk ends (Esc).
+   */
+  startWalk(eye: THREE.Vector3, yaw = 0, onExit?: () => void) {
+    this.stopWalk();
+    const { level } = this.engine;
+    this.orbitPose = { position: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov };
+    this.walker = new Walker(level.bvh, level.bounds);
+    this.walker.place(new THREE.Vector3(eye.x, eye.y - this.walker.options.eyeHeight, eye.z), yaw);
+    this.controls.enabled = false;
+    this.walkControls = new WalkControls(this.walker, this.dom, () => { this.stopWalk(); onExit?.(); });
+    this.camera.fov = 75;
+    this.camera.updateProjectionMatrix();
+    this.walker.applyTo(this.camera);
+    this.dirty = true;
+    return this.walker;
+  }
+
+  stopWalk() {
+    if (!this.walker) return;
+    this.walkControls?.dispose();
+    this.walkControls = undefined;
+    this.walker = undefined;
+    this.controls.enabled = true;
+    if (this.orbitPose) {
+      this.camera.position.copy(this.orbitPose.position);
+      this.controls.target.copy(this.orbitPose.target);
+      this.camera.fov = this.orbitPose.fov;
+      this.camera.updateProjectionMatrix();
+      this.controls.update();
+    }
+    this.dirty = true;
+  }
+
+  /** Per-frame update: moves the walker (if any). `dt` in seconds. */
+  tick(dt: number) {
+    if (!this.walker) return;
+    this.walker.step(dt);
+    this.walker.applyTo(this.camera);
+    this.dirty = true;
+  }
+
+  dispose() {
+    this.stopWalk();
+    this.setPbr(undefined);
+    this.controls.dispose();
   }
 
   goTo(spec: ViewSpec) {
