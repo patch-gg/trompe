@@ -16,8 +16,9 @@ back onto the level and bakes one texture. It paints under overcast light, so th
 engine lights it with real shadows. Planning, projection and baking run in your browser on your GPU; the image models
 run on [fal](https://fal.ai).
 
-[Demo video, 42 s](video/trompe_demo_web.mp4) · [Before and after](video/before_after.jpg) ·
-[Baked shadows vs real light](video/shadows_before_after.jpg) · [What the prompts fixed](video/prompt_fix.jpg)
+[Try trompe on Patch](https://patch.gg/patch/trompe) · [Demo video, 42 s](video/trompe_demo_web.mp4) ·
+[Before and after](video/before_after.jpg) · [Baked shadows vs real light](video/shadows_before_after.jpg) ·
+[What the prompts fixed](video/prompt_fix.jpg)
 
 ## Quick start
 
