@@ -9,6 +9,9 @@
 
 **@patch_gg** · village blockout + FLUX 3 Klein + Fibo 2 · 128 views on fal, $4.44, 26 minutes, one view at a time.
 
+trompe is part of [Patch (patch.gg)](https://patch.gg), where people and their coding agents make browser games and
+mods, and publish them for anyone to play.
+
 **Good for realistic buildings seen from a few metres or more:** third-person and top-down games, trailers, big backdrops, and a first look at a level. **Not for stylised looks:** it's a photo painter, so it adds grime and uneven colour. **Not for the ground at a first-person player's feet:** that blurs, because the whole level shares one texture.
 
 trompe plans cameras where a player can stand, has an image model paint what each one sees, projects every painting
@@ -70,6 +73,22 @@ pch publish
 
 Publishing needs [Patch Desktop](https://docs.patch.gg/get-started) open on a Windows PC: it plays the game once to
 test it before it goes live.
+
+## Use it from your coding agent
+
+Patch's MCP server gives your coding agent Patch's tools: it can find trompe and Patch's other open repos, pull models,
+materials and HDRIs from Patch's free asset library, and build, test and publish a game on Patch. `pch`, Patch's
+command line, sets it up:
+
+```bash
+curl -fsSL https://patch.gg/install.sh | sh    # installs pch; then open a new terminal
+pch login
+pch agent install                              # gives Claude Code, Codex and Cursor Patch's tools
+```
+
+The installer runs `pch agent install` for you; run it again for an agent you add later, then restart the agent. An app
+that adds MCP servers by address connects to `https://patch.gg/api/mcp` and signs in with your Patch account.
+[Patch's MCP server](https://docs.patch.gg/mcp-server) lists its tools.
 
 ## How it works
 
